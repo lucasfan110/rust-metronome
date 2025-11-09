@@ -83,7 +83,7 @@ impl UserInput {
             }
             Resume => {
                 metronome_data.is_paused = false;
-                metronome_data.beat = 0;
+                metronome_data.beat = metronome_data.time_signature().0 - 1;
             }
             Help => print_help(),
             Clear => {}
