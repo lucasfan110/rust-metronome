@@ -98,8 +98,8 @@ fn main() -> anyhow::Result<()> {
                     {
                         let mut metronome_data = metronome_data.lock().unwrap();
                         metronome_data.tap_mode = false;
-                        metronome_data.is_paused = false;
                     }
+                    sender.send(UserInput::Resume)?;
                     tempo_measurer.clear();
                     continue;
                 }

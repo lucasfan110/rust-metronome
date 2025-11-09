@@ -21,6 +21,7 @@ impl TempoMeasurer {
             .timestamps
             .iter()
             .copied()
+            .skip(1)
             .fold(
                 (Duration::default(), self.timestamps[0]),
                 |acc, timestamp| (acc.0 + (timestamp - acc.1), timestamp),
