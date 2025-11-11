@@ -171,7 +171,7 @@ impl MetronomeData {
             time_signature,
             tempo_type,
             subdivision: cli.subdivision,
-            beat: time_signature.0 - 1,
+            beat: 0,
             duration_per_beat: get_duration_per_beat(cli.tempo, tempo_type, time_signature),
             is_paused: false,
             tap_mode: false,

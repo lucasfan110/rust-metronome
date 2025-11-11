@@ -1,3 +1,8 @@
+## Version 0.2.2 (11/11/2025)
+
+* Changed from using `Mutex` to `RwLock`
+* Minor code optimizations
+
 ## Version 0.2.1 (11/08/2025)
 
 * Minor fix when resuming, starting on beat 1 instead of the last beat.

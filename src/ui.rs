@@ -3,7 +3,7 @@ use crossterm::QueueableCommand;
 use crossterm::cursor;
 use crossterm::style::{Print, PrintStyledContent, Stylize};
 use std::io::{self, Write};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 
 fn get_beat_to_print(beat_index: u8, is_eighths_time_signature: bool) -> String {
     let beat = match is_eighths_time_signature {
@@ -29,11 +29,11 @@ fn get_beat_to_print(beat_index: u8, is_eighths_time_signature: bool) -> String 
 }
 
 pub struct Ui {
-    pub metronome_data: Arc<Mutex<MetronomeData>>,
+    pub metronome_data: Arc<RwLock<MetronomeData>>,
 }
 
 impl Ui {
-    pub fn new(metronome_data: Arc<Mutex<MetronomeData>>) -> Self {
+    pub fn new(metronome_data: Arc<RwLock<MetronomeData>>) -> Self {
         Self { metronome_data }
     }
 
@@ -51,7 +51,7 @@ impl Ui {
     }
 
     fn print_info(&self) -> io::Result<()> {
-        let metronome_data = self.metronome_data.lock().unwrap();
+        let metronome_data = self.metronome_data.read().unwrap();
         let subdivision = if metronome_data.subdivision() == 1 {
             String::from("None")
         } else {
@@ -73,7 +73,7 @@ impl Ui {
         io::stdout().queue(Print("[    "))?;
 
         let (beats_per_measure, beat, is_eighths_time_signature) = {
-            let metronome_data = self.metronome_data.lock().unwrap();
+            let metronome_data = self.metronome_data.read().unwrap();
             (
                 metronome_data.time_signature().0,
                 metronome_data.beat,

@@ -5,7 +5,7 @@ use UserInput::*;
 use std::{
     process,
     str::FromStr,
-    sync::{Arc, Mutex},
+    sync::{Arc, RwLock},
 };
 
 fn print_help() {
@@ -38,6 +38,7 @@ pub enum UserInput {
     Clear,
     Tap,
     SetTempo(String),
+    SetTempoDirect(u16),
     SetTimeSignature(String),
     SetTempoType(String),
     Unknown(String),
@@ -73,8 +74,8 @@ impl FromStr for UserInput {
 }
 
 impl UserInput {
-    pub fn execute(&self, metronome_data: Arc<Mutex<MetronomeData>>) {
-        let mut metronome_data = metronome_data.lock().unwrap();
+    pub fn execute(&self, metronome_data: Arc<RwLock<MetronomeData>>) {
+        let mut metronome_data = metronome_data.write().unwrap();
 
         match self {
             Pause => {
@@ -83,7 +84,7 @@ impl UserInput {
             }
             Resume => {
                 metronome_data.is_paused = false;
-                metronome_data.beat = metronome_data.time_signature().0 - 1;
+                metronome_data.beat = 0;
             }
             Help => print_help(),
             Clear => {}
@@ -96,6 +97,7 @@ impl UserInput {
                     tempo_str, TEMPO_MIN, TEMPO_MAX
                 ),
             },
+            SetTempoDirect(tempo) => metronome_data.set_tempo(*tempo),
             SetTimeSignature(time_signature_str) => {
                 match time_signature_str.parse::<TimeSignature>() {
                     Ok(time_signature) => metronome_data.set_time_signature(time_signature),
@@ -107,7 +109,7 @@ impl UserInput {
                 Err(_) => println!("Invalid tempo type {}!", tempo_type_str),
             },
             Tap => {
-                println!("TAP MODE. Press enter for each beat. Press `q` to exit.");
+                println!("TAP MODE. Press enter for each beat. Enter `q` to exit.");
 
                 metronome_data.tap_mode = true;
                 metronome_data.is_paused = true;

@@ -5,7 +5,7 @@ use metronome_data::tempo_measurer::TempoMeasurer;
 use metronome_data::{MetronomeData, TEMPO_RANGE, TempoType, TimeSignature};
 use metronome_sound::{MetronomeSound, MetronomeSoundType};
 use std::io;
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::{Arc, RwLock, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 use ui::Ui;
@@ -63,7 +63,7 @@ fn main() -> anyhow::Result<()> {
             .exit();
     }
 
-    let metronome_data = Arc::new(Mutex::new(MetronomeData::new(&cli)));
+    let metronome_data = Arc::new(RwLock::new(MetronomeData::new(&cli)));
 
     // Track the time stamp when the last metronome beat was played. Did this whole
     // minus thing so that there is no awkward wait for the first metronome beat when
@@ -93,32 +93,28 @@ fn main() -> anyhow::Result<()> {
 
             let input_str = input_str.trim();
 
-            if metronome_data.lock().unwrap().tap_mode {
+            if metronome_data.read().unwrap().tap_mode {
                 if matches!(input_str, "quit" | "q") {
-                    {
-                        let mut metronome_data = metronome_data.lock().unwrap();
-                        metronome_data.tap_mode = false;
-                    }
-                    sender.send(UserInput::Resume)?;
+                    metronome_data.write().unwrap().tap_mode = false;
                     tempo_measurer.clear();
+                    sender.send(UserInput::Resume)?;
                     continue;
                 }
 
                 tempo_measurer.tap();
 
                 if tempo_measurer.num_tapped() >= 4 {
-                    let tempo = tempo_measurer.calculate_tempo();
-
-                    sender.send(UserInput::SetTempo(tempo.to_string()))?;
+                    sender.send(UserInput::SetTempoDirect(tempo_measurer.calculate_tempo()))?;
                 } else {
                     sender.send(UserInput::Clear)?;
                 }
-            } else {
-                let user_input = input_str.parse::<UserInput>();
 
-                if let Ok(user_input) = user_input {
-                    sender.send(user_input)?;
-                }
+                continue;
+            }
+
+            let user_input = input_str.parse::<UserInput>();
+            if let Ok(user_input) = user_input {
+                sender.send(user_input)?;
             }
         }
     });
@@ -129,8 +125,7 @@ fn main() -> anyhow::Result<()> {
         thread::sleep(TICK_LENGTH);
 
         let should_play_beat = {
-            let metronome_data = metronome_data.lock().unwrap();
-
+            let metronome_data = metronome_data.read().unwrap();
             !metronome_data.is_paused
                 && Instant::now() - last_beat_time >= metronome_data.duration_per_beat()
         };
@@ -139,8 +134,7 @@ fn main() -> anyhow::Result<()> {
             last_beat_time = Instant::now();
 
             let metronome_sound_type = {
-                let mut metronome_data = metronome_data.lock().unwrap();
-                metronome_data.next_beat();
+                let metronome_data = metronome_data.read().unwrap();
 
                 // Depending on which beat the metronome is on, it plays a different
                 // metronome sound
@@ -152,6 +146,8 @@ fn main() -> anyhow::Result<()> {
 
             _sink = metronome_sound.play(metronome_sound_type)?;
             ui.render()?;
+
+            metronome_data.write().unwrap().next_beat()
         }
 
         // If got a message from the input thread
