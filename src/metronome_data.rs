@@ -1,9 +1,12 @@
-use crate::Cli;
+use crate::{Cli, metronome_sound::MetronomeSoundType, user_input::UserInput};
 use clap::ValueEnum;
-use std::fmt::{self, Display, Formatter};
-use std::ops::RangeInclusive;
-use std::str::FromStr;
-use std::time::Duration;
+use std::{
+    fmt::{self, Display, Formatter},
+    ops::RangeInclusive,
+    process,
+    str::FromStr,
+    time::Duration,
+};
 
 pub mod tempo_measurer;
 
@@ -30,6 +33,29 @@ fn get_duration_per_beat(
     let new_tempo = tempo as f64 * time_signature.1 as f64 / (4.0 / note_length);
 
     Duration::from_secs_f64(60.0 / new_tempo)
+}
+
+fn print_help() {
+    println!("Commands: ");
+    println!("pause, p: Pause the metronome");
+    println!("resume, r: Resume the metronome");
+    println!("quit, q: Exit the metronome");
+    println!("help, h: Print help");
+    println!("clear, c: Clear the screen");
+    println!("tempo, t <TEMPO>: Set the tempo of the metronome");
+    println!("\tExample: t 60");
+    println!("time <TIME_SIGNATURE>: Set the time signature of the metronome");
+    println!("tempo-type, tt <TEMPO_TYPE>: Set the tempo type of the metronome");
+    println!(
+        "\tExample: `tt dotted-quarter` changes the current tempo type \
+        from whatever to dotted quarter note equals"
+    );
+    println!("subdivision, s <SUBDIVISION>: Set the subdivision of the metronome");
+    println!(
+        "tap: Enters tap mode. Press return for each beat, and after 4 taps, the \
+        tempo of the metronome will automatically change to the tapped tempo. Press \
+        `q` to stop"
+    )
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, ValueEnum, Debug)]
@@ -150,6 +176,7 @@ impl Display for TimeSignature {
 pub struct MetronomeData {
     tempo: u16,
     duration_per_beat: Duration,
+    duration_per_subdivided_beat: Duration,
     pub beat: u8,
     tempo_type: TempoType,
     time_signature: TimeSignature,
@@ -166,27 +193,44 @@ impl MetronomeData {
             .tempo_type
             .unwrap_or(TempoType::get_default_based(time_signature));
 
-        Self {
+        let mut new_value = Self {
             tempo: cli.tempo,
             time_signature,
             tempo_type,
             subdivision: cli.subdivision,
             beat: 0,
-            duration_per_beat: get_duration_per_beat(cli.tempo, tempo_type, time_signature),
+            duration_per_beat: Duration::ZERO,
+            duration_per_subdivided_beat: Duration::ZERO,
             is_paused: false,
             tap_mode: false,
-        }
+        };
+
+        new_value.recalculate_duration_per_beat();
+        new_value
     }
 
     pub fn duration_per_beat(&self) -> Duration {
         self.duration_per_beat
     }
 
-    pub fn set_tempo(&mut self, tempo: u16) {
-        self.tempo = tempo.clamp(TEMPO_MIN, TEMPO_MAX);
-        self.beat = 0;
+    fn recalculate_duration_per_subdivided_beat(&mut self) {
+        self.duration_per_subdivided_beat = self.duration_per_beat.div_f64(self.subdivision as f64);
+    }
+
+    fn recalculate_duration_per_beat(&mut self) {
         self.duration_per_beat =
             get_duration_per_beat(self.tempo, self.tempo_type, self.time_signature);
+        self.recalculate_duration_per_subdivided_beat();
+    }
+
+    fn reset_beat(&mut self) {
+        self.beat = 0;
+    }
+
+    pub fn set_tempo(&mut self, tempo: u16) {
+        self.tempo = tempo.clamp(TEMPO_MIN, TEMPO_MAX);
+        self.reset_beat();
+        self.recalculate_duration_per_beat();
     }
 
     pub fn tempo(&self) -> u16 {
@@ -194,12 +238,15 @@ impl MetronomeData {
     }
 
     pub fn set_tempo_type(&mut self, tempo_type: TempoType) {
-        self.tempo = (self.tempo as f64
-            * (self.tempo_type.to_note_length() / tempo_type.to_note_length()))
-            as u16;
         self.tempo_type = tempo_type;
-        self.duration_per_beat =
-            get_duration_per_beat(self.tempo, self.tempo_type, self.time_signature);
+        // Make sure the tempo stays the "same", with the same amount of beat per
+        // second relative to what note value a tempo equals to
+        let new_tempo = (self.tempo as f64
+            * (self.tempo_type.to_note_length() / tempo_type.to_note_length()))
+        .round() as u16;
+        // Still set the tempo because rounding error may cause slight change in
+        // the duration per beat
+        self.set_tempo(new_tempo);
     }
 
     pub fn tempo_type(&self) -> TempoType {
@@ -208,10 +255,7 @@ impl MetronomeData {
 
     pub fn set_time_signature(&mut self, time_signature: TimeSignature) {
         self.time_signature = time_signature;
-        self.tempo_type = TempoType::get_default_based(time_signature);
-        self.duration_per_beat =
-            get_duration_per_beat(self.tempo, self.tempo_type, self.time_signature);
-        self.beat = 0;
+        self.set_tempo_type(TempoType::get_default_based(time_signature));
     }
 
     pub fn time_signature(&self) -> TimeSignature {
@@ -226,7 +270,79 @@ impl MetronomeData {
         self.subdivision
     }
 
+    pub fn set_subdivision(&mut self, subdivision: u8) {
+        self.subdivision = subdivision;
+        self.recalculate_duration_per_subdivided_beat();
+    }
+
     pub fn next_beat(&mut self) {
         self.beat = (self.beat + 1) % self.time_signature().0;
+    }
+
+    pub fn get_current_sound_type(&self) -> MetronomeSoundType {
+        // Depending on which beat the metronome is on, it plays a different
+        // metronome sound
+        MetronomeSoundType::from_beat(self.beat, self.time_signature_is_eighths())
+    }
+
+    pub fn execute(&mut self, user_input: &UserInput) {
+        use UserInput::*;
+
+        match user_input {
+            Pause => {
+                println!("PAUSED!");
+                self.is_paused = true
+            }
+            Resume => {
+                self.is_paused = false;
+                self.beat = 0;
+            }
+            Help => print_help(),
+            Clear => {}
+            SetTempo(tempo_str) => match tempo_str.parse::<u16>() {
+                Ok(tempo) if is_tempo_valid(tempo) => {
+                    self.set_tempo(tempo);
+                }
+                _ => println!(
+                    "Invalid tempo `{}`! Must be a valid whole number between {}-{}!",
+                    tempo_str, TEMPO_MIN, TEMPO_MAX
+                ),
+            },
+            SetTempoDirect(tempo) => self.set_tempo(*tempo),
+            SetTimeSignature(time_signature_str) => {
+                match time_signature_str.parse::<TimeSignature>() {
+                    Ok(time_signature) => self.set_time_signature(time_signature),
+                    Err(_) => println!("Invalid time signature `{}`!", time_signature_str),
+                }
+            }
+            SetTempoType(tempo_type_str) => match tempo_type_str.parse::<TempoType>() {
+                Ok(tempo_type) => self.set_tempo_type(tempo_type),
+                Err(_) => println!("Invalid tempo type {}!", tempo_type_str),
+            },
+            SetSubdivision(subdivision_str) => match subdivision_str.parse::<u8>() {
+                Ok(subdivision) if subdivision >= 1 => self.set_subdivision(subdivision),
+                _ => println!(
+                    "Invalid subdivision {}! Must be a whole number that is at least 1!",
+                    subdivision_str
+                ),
+            },
+            Tap => {
+                println!("TAP MODE. Press enter for each beat. Enter `q` to exit.");
+
+                self.tap_mode = true;
+                self.is_paused = true;
+            }
+            Quit => {
+                println!("Goodbye!");
+                process::exit(0);
+            }
+            Unknown(command) => {
+                println!("Unknown command `{}`!", command);
+            }
+        }
+    }
+
+    pub fn duration_per_subdivided_beat(&self) -> Duration {
+        self.duration_per_subdivided_beat
     }
 }

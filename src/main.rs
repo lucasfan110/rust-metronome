@@ -1,13 +1,18 @@
 use clap::{CommandFactory, Parser};
-use crossterm::ExecutableCommand;
-use crossterm::terminal::{Clear, ClearType};
-use metronome_data::tempo_measurer::TempoMeasurer;
-use metronome_data::{MetronomeData, TEMPO_RANGE, TempoType, TimeSignature};
+use crossterm::{
+    ExecutableCommand,
+    terminal::{Clear, ClearType},
+};
+use metronome_data::{
+    MetronomeData, TEMPO_RANGE, TempoType, TimeSignature, tempo_measurer::TempoMeasurer,
+};
 use metronome_sound::{MetronomeSound, MetronomeSoundType};
-use std::io;
-use std::sync::{Arc, RwLock, mpsc};
-use std::thread;
-use std::time::{Duration, Instant};
+use std::{
+    io,
+    sync::{Arc, RwLock, mpsc},
+    thread,
+    time::{Duration, Instant},
+};
 use ui::Ui;
 use user_input::UserInput;
 
@@ -17,6 +22,18 @@ mod ui;
 mod user_input;
 
 const TICK_LENGTH: Duration = Duration::from_micros(1);
+
+fn should_play_beat(metronome_data: &MetronomeData, last_beat_time: Instant) -> bool {
+    !metronome_data.is_paused && last_beat_time.elapsed() >= metronome_data.duration_per_beat()
+}
+
+fn should_play_subdivided_beat(
+    metronome_data: &MetronomeData,
+    last_subdivided_beat_time: Instant,
+) -> bool {
+    !metronome_data.is_paused
+        && last_subdivided_beat_time.elapsed() >= metronome_data.duration_per_subdivided_beat()
+}
 
 #[derive(Parser)]
 #[command(version, about, long_about)]
@@ -39,7 +56,7 @@ struct Cli {
 
     /// The subdivision for the metronome, in terms of numbers. For example,
     /// `2` represents splitting a beat into 2
-    #[arg(short, long, default_value_t = 1)]
+    #[arg(short, long, default_value_t = 1, value_parser = clap::value_parser!(u8).range(1..))]
     subdivision: u8,
 
     /// The subdivision setting. It gives you an ability to customize what beats
@@ -69,6 +86,7 @@ fn main() -> anyhow::Result<()> {
     // minus thing so that there is no awkward wait for the first metronome beat when
     // the program first starts.
     let mut last_beat_time = Instant::now() - Duration::from_secs(1_000);
+    let mut last_subdivided_beat_time = Instant::now();
 
     let ui = Ui::new(Arc::clone(&metronome_data));
     let metronome_sound = MetronomeSound::new()?;
@@ -124,35 +142,33 @@ fn main() -> anyhow::Result<()> {
     loop {
         thread::sleep(TICK_LENGTH);
 
-        let should_play_beat = {
-            let metronome_data = metronome_data.read().unwrap();
-            !metronome_data.is_paused
-                && Instant::now() - last_beat_time >= metronome_data.duration_per_beat()
-        };
-
-        if should_play_beat {
+        if should_play_beat(&metronome_data.read().unwrap(), last_beat_time) {
             last_beat_time = Instant::now();
+            last_subdivided_beat_time = Instant::now();
 
-            let metronome_sound_type = {
-                let metronome_data = metronome_data.read().unwrap();
-
-                // Depending on which beat the metronome is on, it plays a different
-                // metronome sound
-                MetronomeSoundType::from_beat(
-                    metronome_data.beat,
-                    metronome_data.time_signature_is_eighths(),
-                )
-            };
-
+            let metronome_sound_type = metronome_data.read().unwrap().get_current_sound_type();
             _sink = metronome_sound.play(metronome_sound_type)?;
             ui.render()?;
 
             metronome_data.write().unwrap().next_beat()
+        } else if should_play_subdivided_beat(
+            &metronome_data.read().unwrap(),
+            last_subdivided_beat_time,
+        ) {
+            last_subdivided_beat_time = Instant::now();
+            _sink = metronome_sound.play(MetronomeSoundType::Subdivision)?;
         }
 
         // If got a message from the input thread
         if let Ok(message) = receiver.try_recv() {
-            message.execute(Arc::clone(&metronome_data));
+            metronome_data.write().unwrap().execute(&message);
+
+            if let UserInput::Pause = message {
+                // Subtract last beat time by a huge amount so when the user resumes
+                // there is no awkward wait, especially for slower tempo
+                last_beat_time -= Duration::from_secs(1_000);
+            }
+
             ui.render()?;
         }
     }

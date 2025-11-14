@@ -1,3 +1,9 @@
+## Version 0.3.0 (11/14/2025)
+
+* Added subdivision
+* Ability to set subdivision within the metronome while it's running
+* Minor code stylistic changes
+
 ## Version 0.2.2 (11/11/2025)
 
 * Changed from using `Mutex` to `RwLock`

@@ -1,5 +1,4 @@
-use std::env;
-use std::fs::File;
+use std::{env, fs::File};
 
 #[derive(Clone, Copy)]
 pub enum MetronomeSoundType {

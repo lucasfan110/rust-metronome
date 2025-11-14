@@ -1,9 +1,12 @@
 use crate::metronome_data::MetronomeData;
-use crossterm::QueueableCommand;
-use crossterm::cursor;
-use crossterm::style::{Print, PrintStyledContent, Stylize};
-use std::io::{self, Write};
-use std::sync::{Arc, RwLock};
+use crossterm::{
+    QueueableCommand, cursor,
+    style::{Print, PrintStyledContent, Stylize},
+};
+use std::{
+    io::{self, Write},
+    sync::{Arc, RwLock},
+};
 
 fn get_beat_to_print(beat_index: u8, is_eighths_time_signature: bool) -> String {
     let beat = match is_eighths_time_signature {

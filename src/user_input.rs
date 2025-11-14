@@ -1,34 +1,5 @@
-use crate::metronome_data::{
-    MetronomeData, TEMPO_MAX, TEMPO_MIN, TempoType, TimeSignature, is_tempo_valid,
-};
 use UserInput::*;
-use std::{
-    process,
-    str::FromStr,
-    sync::{Arc, RwLock},
-};
-
-fn print_help() {
-    println!("Commands: ");
-    println!("pause, p: Pause the metronome");
-    println!("resume, r: Resume the metronome");
-    println!("quit, q: Exit the metronome");
-    println!("help, h: Print help");
-    println!("clear, c: Clear the screen");
-    println!("tempo, t <TEMPO>: Set the tempo of the metronome");
-    println!("\tExample: t 60");
-    println!("time <TIME_SIGNATURE>: Set the time signature of the metronome");
-    println!("tempo-type, tt <TEMPO_TYPE>: Set the tempo type of the metronome");
-    println!(
-        "\tExample: `tt dotted-quarter` changes the current tempo type \
-        from whatever to dotted quarter note equals"
-    );
-    println!(
-        "tap: Enters tap mode. Press return for each beat, and after 4 taps, the \
-        tempo of the metronome will automatically change to the tapped tempo. Press \
-        `q` to stop"
-    )
-}
+use std::str::FromStr;
 
 pub enum UserInput {
     Pause,
@@ -41,6 +12,7 @@ pub enum UserInput {
     SetTempoDirect(u16),
     SetTimeSignature(String),
     SetTempoType(String),
+    SetSubdivision(String),
     Unknown(String),
 }
 
@@ -67,60 +39,9 @@ impl FromStr for UserInput {
             "tempo" | "t" => SetTempo(get_nth_arg(1)),
             "time" => SetTimeSignature(get_nth_arg(1)),
             "tempo-type" | "tt" => SetTempoType(get_nth_arg(1)),
+            "subdivision" | "s" => SetSubdivision(get_nth_arg(1)),
             "tap" => Tap,
             command => Unknown(command.to_string()),
         })
-    }
-}
-
-impl UserInput {
-    pub fn execute(&self, metronome_data: Arc<RwLock<MetronomeData>>) {
-        let mut metronome_data = metronome_data.write().unwrap();
-
-        match self {
-            Pause => {
-                println!("PAUSED!");
-                metronome_data.is_paused = true
-            }
-            Resume => {
-                metronome_data.is_paused = false;
-                metronome_data.beat = 0;
-            }
-            Help => print_help(),
-            Clear => {}
-            SetTempo(tempo_str) => match tempo_str.parse::<u16>() {
-                Ok(tempo) if is_tempo_valid(tempo) => {
-                    metronome_data.set_tempo(tempo);
-                }
-                _ => println!(
-                    "Invalid tempo `{}`! Must be a valid whole number between {}-{}!",
-                    tempo_str, TEMPO_MIN, TEMPO_MAX
-                ),
-            },
-            SetTempoDirect(tempo) => metronome_data.set_tempo(*tempo),
-            SetTimeSignature(time_signature_str) => {
-                match time_signature_str.parse::<TimeSignature>() {
-                    Ok(time_signature) => metronome_data.set_time_signature(time_signature),
-                    Err(_) => println!("Invalid time signature `{}`!", time_signature_str),
-                }
-            }
-            SetTempoType(tempo_type_str) => match tempo_type_str.parse::<TempoType>() {
-                Ok(tempo_type) => metronome_data.set_tempo_type(tempo_type),
-                Err(_) => println!("Invalid tempo type {}!", tempo_type_str),
-            },
-            Tap => {
-                println!("TAP MODE. Press enter for each beat. Enter `q` to exit.");
-
-                metronome_data.tap_mode = true;
-                metronome_data.is_paused = true;
-            }
-            Quit => {
-                println!("Goodbye!");
-                process::exit(0);
-            }
-            Unknown(command) => {
-                println!("Unknown command `{}`!", command);
-            }
-        }
     }
 }
