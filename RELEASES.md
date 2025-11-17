@@ -1,3 +1,8 @@
+## Version 0.3.1 (11/16/2025)
+
+* Updated clap to 4.5.51
+* Statically link the audio file so no additional installation is required. Can use right out of the box
+
 ## Version 0.3.0 (11/14/2025)
 
 * Added subdivision

@@ -1,10 +1,10 @@
 [package]
 name = "metronome"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2024"
 
 [dependencies]
 anyhow = "1.0.100"
-clap = { version = "4.5.50", features = ["derive"] }
+clap = { version = "4.5.51", features = ["derive"] }
 crossterm = "0.29.0"
 rodio = "0.21.1"

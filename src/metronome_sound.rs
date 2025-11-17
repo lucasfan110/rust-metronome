@@ -1,4 +1,8 @@
-use std::{env, fs::File};
+use std::io::Cursor;
+
+static METRONOME_SOUND_1_BYTES: &[u8] = include_bytes!("./audio/beat1.mp3");
+static METRONOME_SOUND_2_BYTES: &[u8] = include_bytes!("./audio/beat2.mp3");
+static METRONOME_SOUND_3_BYTES: &[u8] = include_bytes!("./audio/beat3.mp3");
 
 #[derive(Clone, Copy)]
 pub enum MetronomeSoundType {
@@ -8,18 +12,12 @@ pub enum MetronomeSoundType {
 }
 
 impl MetronomeSoundType {
-    fn get_file_path(self) -> String {
-        // By default the metronome sound files should be located in
-        // %HOME_DIR%/rust-metronome/audio
-        let home_dir = env::home_dir().expect("Failed to find home_dir");
-        let home_dir = home_dir
-            .to_str()
-            .expect("Failed to convert home_dir to string");
-
-        format!(
-            "{}\\rust-metronome\\audio\\beat{}.mp3",
-            home_dir, self as i32
-        )
+    fn get_audio_bytes(self) -> &'static [u8] {
+        match self {
+            MetronomeSoundType::Accented => METRONOME_SOUND_1_BYTES,
+            MetronomeSoundType::Beat => METRONOME_SOUND_2_BYTES,
+            MetronomeSoundType::Subdivision => METRONOME_SOUND_3_BYTES,
+        }
     }
 
     /// Get the appropriate metronome sound to play based on the current beat of
@@ -59,9 +57,9 @@ impl MetronomeSound {
     }
 
     pub fn play(&self, metronome_sound_type: MetronomeSoundType) -> anyhow::Result<rodio::Sink> {
-        let file_name = metronome_sound_type.get_file_path();
-        let beat_audio = File::open(file_name)?;
-
-        Ok(rodio::play(self.stream_handle.mixer(), beat_audio)?)
+        Ok(rodio::play(
+            self.stream_handle.mixer(),
+            Cursor::new(metronome_sound_type.get_audio_bytes()),
+        )?)
     }
 }
