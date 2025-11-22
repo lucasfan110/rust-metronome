@@ -289,10 +289,7 @@ impl MetronomeData {
         use UserInput::*;
 
         match user_input {
-            Pause => {
-                println!("PAUSED!");
-                self.is_paused = true
-            }
+            Pause => self.is_paused = true,
             Resume => {
                 self.is_paused = false;
                 self.beat = 0;
@@ -327,8 +324,6 @@ impl MetronomeData {
                 ),
             },
             Tap => {
-                println!("TAP MODE. Press enter for each beat. Enter `q` to exit.");
-
                 self.tap_mode = true;
                 self.is_paused = true;
             }
@@ -339,6 +334,13 @@ impl MetronomeData {
             Unknown(command) => {
                 println!("Unknown command `{}`!", command);
             }
+        };
+
+        if self.is_paused {
+            println!("PAUSED!");
+        }
+        if self.tap_mode {
+            println!("TAP MODE. Press enter for each beat. Enter `q` to exit.");
         }
     }
 

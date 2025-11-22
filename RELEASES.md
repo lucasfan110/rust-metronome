@@ -1,3 +1,8 @@
+## Version 0.3.2 (11/21/2025)
+
+* Updated clap to 4.5.53
+* Quality of life change, now if the metronome is paused or in tap mode, entering other commands or pressing enter won't make the message disappear, so the user will always know if they are in tap mode or they are paused without confusion.
+
 ## Version 0.3.1 (11/16/2025)
 
 * Updated clap to 4.5.51
