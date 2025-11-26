@@ -1,3 +1,8 @@
+## Version 0.3.3 (11/25/2025)
+
+* Minor code refactor
+* Updated beat2 audio so that there isn't a slight silence at the start of the audio
+
 ## Version 0.3.2 (11/21/2025)
 
 * Updated clap to 4.5.53

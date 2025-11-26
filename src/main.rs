@@ -70,15 +70,21 @@ struct Cli {
     subdivision_setting: Option<String>,
 }
 
+impl Cli {
+    fn validate_time_signature(&self) {
+        if let Err(err) = self.time_signature.parse::<TimeSignature>() {
+            Cli::command()
+                .error(clap::error::ErrorKind::InvalidValue, err)
+                .exit();
+        }
+    }
+}
+
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     // Check if time signature is valid
-    if let Err(err) = cli.time_signature.parse::<TimeSignature>() {
-        Cli::command()
-            .error(clap::error::ErrorKind::InvalidValue, err)
-            .exit();
-    }
+    cli.validate_time_signature();
 
     let metronome_data = Arc::new(RwLock::new(MetronomeData::new(&cli)));
 

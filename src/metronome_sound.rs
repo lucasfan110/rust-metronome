@@ -1,23 +1,21 @@
 use std::io::Cursor;
 
-static METRONOME_SOUND_1_BYTES: &[u8] = include_bytes!("./audio/beat1.mp3");
-static METRONOME_SOUND_2_BYTES: &[u8] = include_bytes!("./audio/beat2.mp3");
-static METRONOME_SOUND_3_BYTES: &[u8] = include_bytes!("./audio/beat3.mp3");
+static METRONOME_SOUNDS: &[&[u8]] = &[
+    include_bytes!("./audio/beat1.mp3"),
+    include_bytes!("./audio/beat2.mp3"),
+    include_bytes!("./audio/beat3.mp3"),
+];
 
 #[derive(Clone, Copy)]
 pub enum MetronomeSoundType {
-    Accented = 1,
+    Accented = 0,
     Beat,
     Subdivision,
 }
 
 impl MetronomeSoundType {
     fn get_audio_bytes(self) -> &'static [u8] {
-        match self {
-            MetronomeSoundType::Accented => METRONOME_SOUND_1_BYTES,
-            MetronomeSoundType::Beat => METRONOME_SOUND_2_BYTES,
-            MetronomeSoundType::Subdivision => METRONOME_SOUND_3_BYTES,
-        }
+        METRONOME_SOUNDS[self as usize]
     }
 
     /// Get the appropriate metronome sound to play based on the current beat of
