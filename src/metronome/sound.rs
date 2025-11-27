@@ -1,12 +1,12 @@
 use std::io::Cursor;
 
 static METRONOME_SOUNDS: &[&[u8]] = &[
-    include_bytes!("./audio/beat1.mp3"),
-    include_bytes!("./audio/beat2.mp3"),
-    include_bytes!("./audio/beat3.mp3"),
+    include_bytes!("../audio/beat1.mp3"),
+    include_bytes!("../audio/beat2.mp3"),
+    include_bytes!("../audio/beat3.mp3"),
 ];
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum MetronomeSoundType {
     Accented = 0,
     Beat,

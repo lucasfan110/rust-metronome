@@ -1,3 +1,9 @@
+## Version 0.3.4 (11/27/2025)
+
+* Minor code refactor
+* Changed how the UI renders the metronome
+* Fixed an issue when the tempo type is changed where the tempo won't stay consistent
+
 ## Version 0.3.3 (11/25/2025)
 
 * Minor code refactor

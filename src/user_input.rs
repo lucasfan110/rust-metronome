@@ -1,6 +1,7 @@
 use UserInput::*;
 use std::str::FromStr;
 
+#[derive(Debug, Clone)]
 pub enum UserInput {
     Pause,
     Resume,

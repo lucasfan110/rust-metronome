@@ -1,5 +1,6 @@
 use std::time::{Duration, Instant};
 
+#[derive(Debug, Clone)]
 pub struct TempoMeasurer {
     timestamps: Vec<Instant>,
 }

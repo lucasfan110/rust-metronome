@@ -3,25 +3,29 @@ use crossterm::{
     ExecutableCommand,
     terminal::{Clear, ClearType},
 };
-use metronome_data::{
-    MetronomeData, TEMPO_RANGE, TempoType, TimeSignature, tempo_measurer::TempoMeasurer,
+use metronome::{
+    data::{MetronomeData, TEMPO_RANGE, TempoType, TimeSignature},
+    sound::{MetronomeSound, MetronomeSoundType},
 };
-use metronome_sound::{MetronomeSound, MetronomeSoundType};
 use std::{
     io,
     sync::{Arc, RwLock, mpsc},
     thread,
     time::{Duration, Instant},
 };
+use tempo_measurer::TempoMeasurer;
 use ui::Ui;
 use user_input::UserInput;
 
-mod metronome_data;
-mod metronome_sound;
+mod metronome;
+mod tempo_measurer;
 mod ui;
 mod user_input;
 
 const TICK_LENGTH: Duration = Duration::from_micros(1);
+
+/// Number of taps needed before tap mode changes the tempo
+const TAPS_NEEDED: usize = 4;
 
 fn should_play_beat(metronome_data: &MetronomeData, last_beat_time: Instant) -> bool {
     !metronome_data.is_paused && last_beat_time.elapsed() >= metronome_data.duration_per_beat()
@@ -35,7 +39,7 @@ fn should_play_subdivided_beat(
         && last_subdivided_beat_time.elapsed() >= metronome_data.duration_per_subdivided_beat()
 }
 
-#[derive(Parser)]
+#[derive(Parser, Clone, Debug)]
 #[command(version, about, long_about)]
 struct Cli {
     /// The tempo for the metronome, in beats per minute. Cannot be less than 20,
@@ -94,7 +98,7 @@ fn main() -> anyhow::Result<()> {
     let mut last_beat_time = Instant::now() - Duration::from_secs(1_000);
     let mut last_subdivided_beat_time = Instant::now();
 
-    let ui = Ui::new(Arc::clone(&metronome_data));
+    let mut ui = Ui::new(Arc::clone(&metronome_data));
     let metronome_sound = MetronomeSound::new()?;
     // The sink variable that is returned from using the play audio function, saved
     // so that it continues playing because if it's dropped then the audio stops
@@ -127,7 +131,7 @@ fn main() -> anyhow::Result<()> {
 
                 tempo_measurer.tap();
 
-                if tempo_measurer.num_tapped() >= 4 {
+                if tempo_measurer.num_tapped() >= TAPS_NEEDED {
                     sender.send(UserInput::SetTempoDirect(tempo_measurer.calculate_tempo()))?;
                 } else {
                     sender.send(UserInput::Clear)?;

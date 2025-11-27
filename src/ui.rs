@@ -1,12 +1,17 @@
-use crate::metronome_data::MetronomeData;
 use crossterm::{
     QueueableCommand, cursor,
     style::{Print, PrintStyledContent, Stylize},
 };
 use std::{
+    fmt::{self, Write as FmtWrite},
     io::{self, Write},
+    mem,
     sync::{Arc, RwLock},
 };
+
+use crate::metronome::data::MetronomeData;
+
+const SCREEN_TEXT_CAPACITY: usize = 256;
 
 fn get_beat_to_print(beat_index: u8, is_eighths_time_signature: bool) -> String {
     let beat = match is_eighths_time_signature {
@@ -31,29 +36,40 @@ fn get_beat_to_print(beat_index: u8, is_eighths_time_signature: bool) -> String 
     String::from(beat)
 }
 
+#[derive(Debug, Clone)]
 pub struct Ui {
+    screen_text: String,
     pub metronome_data: Arc<RwLock<MetronomeData>>,
 }
 
 impl Ui {
     pub fn new(metronome_data: Arc<RwLock<MetronomeData>>) -> Self {
-        Self { metronome_data }
+        Self {
+            metronome_data,
+            screen_text: String::with_capacity(SCREEN_TEXT_CAPACITY),
+        }
     }
 
-    pub fn render(&self) -> io::Result<()> {
+    pub fn render(&mut self) -> io::Result<()> {
         io::stdout()
             .queue(cursor::SavePosition)?
             .queue(cursor::MoveTo(0, 0))?;
 
-        self.print_info()?;
-        self.print_metronome_beat()?;
+        self.write_info_text().unwrap();
+        self.write_metronome_beat_text().unwrap();
 
-        io::stdout().queue(cursor::RestorePosition)?.flush()?;
+        io::stdout()
+            .queue(Print(mem::replace(
+                &mut self.screen_text,
+                String::with_capacity(SCREEN_TEXT_CAPACITY),
+            )))?
+            .queue(cursor::RestorePosition)?
+            .flush()?;
 
         Ok(())
     }
 
-    fn print_info(&self) -> io::Result<()> {
+    fn write_info_text(&mut self) -> fmt::Result {
         let metronome_data = self.metronome_data.read().unwrap();
         let subdivision = if metronome_data.subdivision() == 1 {
             String::from("None")
@@ -61,19 +77,18 @@ impl Ui {
             metronome_data.subdivision().to_string()
         };
 
-        io::stdout().queue(Print(format!(
-            "Tempo: {} = {}\t\tTime Signature = {}\t\tSubdivision = {}\n",
+        writeln!(
+            self.screen_text,
+            "Tempo: {} = {}\t\tTime Signature = {}\t\tSubdivision = {}",
             metronome_data.tempo_type(),
             metronome_data.tempo(),
             metronome_data.time_signature(),
             subdivision,
-        )))?;
-
-        Ok(())
+        )
     }
 
-    fn print_metronome_beat(&self) -> io::Result<()> {
-        io::stdout().queue(Print("[    "))?;
+    fn write_metronome_beat_text(&mut self) -> fmt::Result {
+        write!(self.screen_text, "[    ")?;
 
         let (beats_per_measure, beat, is_eighths_time_signature) = {
             let metronome_data = self.metronome_data.read().unwrap();
@@ -88,15 +103,19 @@ impl Ui {
             let beat_to_print = get_beat_to_print(i, is_eighths_time_signature);
 
             if i == beat {
-                io::stdout().queue(Print(PrintStyledContent(beat_to_print.italic().blue())))?;
+                write!(
+                    self.screen_text,
+                    "{}",
+                    PrintStyledContent(beat_to_print.italic().blue())
+                )?;
             } else {
-                io::stdout().queue(Print(beat_to_print))?;
+                write!(self.screen_text, "{}", beat_to_print)?;
             }
 
-            io::stdout().queue(Print(" "))?;
+            write!(self.screen_text, " ")?;
         }
 
-        io::stdout().queue(Print("   ]\n"))?;
+        write!(self.screen_text, "   ]")?;
 
         Ok(())
     }
