@@ -14,6 +14,7 @@ pub enum UserInput {
     SetTimeSignature(String),
     SetTempoType(String),
     SetSubdivision(String),
+    SetSubdivisionSetting(String),
     Unknown(String),
 }
 
@@ -22,11 +23,10 @@ impl FromStr for UserInput {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let lowercase = s.to_lowercase();
-        let trimmed = lowercase.trim();
-        let args: Vec<&str> = trimmed.split(" ").collect();
+        let args: Vec<&str> = lowercase.trim().split(" ").collect();
 
         if args.is_empty() {
-            return Ok(Self::Clear);
+            return Ok(Clear);
         }
 
         let get_nth_arg = |index: usize| args.get(index).copied().unwrap_or_default().to_string();
@@ -41,6 +41,7 @@ impl FromStr for UserInput {
             "time" => SetTimeSignature(get_nth_arg(1)),
             "tempo-type" | "tt" => SetTempoType(get_nth_arg(1)),
             "subdivision" | "s" => SetSubdivision(get_nth_arg(1)),
+            "subdivision-setting" | "ss" => SetSubdivisionSetting(get_nth_arg(1)),
             "tap" => Tap,
             command => Unknown(command.to_string()),
         })

@@ -1,17 +1,17 @@
-use clap::{CommandFactory, Parser};
+use clap::Parser;
 use crossterm::{
     ExecutableCommand,
     terminal::{Clear, ClearType},
 };
 use metronome::{
-    data::{MetronomeData, TEMPO_RANGE, TempoType, TimeSignature},
+    data::{MetronomeData, TEMPO_RANGE, TempoType, TimeSignature, beat::MetronomeBeatTracker},
     sound::{MetronomeSound, MetronomeSoundType},
 };
 use std::{
     io,
     sync::{Arc, RwLock, mpsc},
     thread,
-    time::{Duration, Instant},
+    time::Duration,
 };
 use tempo_measurer::TempoMeasurer;
 use ui::Ui;
@@ -27,34 +27,26 @@ const TICK_LENGTH: Duration = Duration::from_micros(1);
 /// Number of taps needed before tap mode changes the tempo
 const TAPS_NEEDED: usize = 4;
 
-fn should_play_beat(metronome_data: &MetronomeData, last_beat_time: Instant) -> bool {
-    !metronome_data.is_paused && last_beat_time.elapsed() >= metronome_data.duration_per_beat()
-}
-
-fn should_play_subdivided_beat(
-    metronome_data: &MetronomeData,
-    last_subdivided_beat_time: Instant,
-) -> bool {
-    !metronome_data.is_paused
-        && last_subdivided_beat_time.elapsed() >= metronome_data.duration_per_subdivided_beat()
-}
-
+/// A metronome written in Rust. Once entered, you can type in commands to change the
+/// various settings within the metronome, such as the tempo, the time signature, the
+/// subdivision, etc. Once entered the metronome, type in `help` and press enter to see
+/// more detailed information about all the commands
 #[derive(Parser, Clone, Debug)]
 #[command(version, about, long_about)]
 struct Cli {
-    /// The tempo for the metronome, in beats per minute. Cannot be less than 20,
+    /// The tempo for the metronome, in beats per minute. Cannot be less than 10,
     /// or greater than 400
-    #[arg(value_parser = clap::value_parser!(u16).range(TEMPO_RANGE))]
+    #[arg(default_value_t = 60, value_parser = clap::value_parser!(u16).range(TEMPO_RANGE))]
     tempo: u16,
 
     /// The time signature for the metronome, in the format of a fraction. For example,
     /// `4/4` or `6/8`
-    #[arg(default_value_t = String::from("4/4"))]
-    time_signature: String,
+    #[arg(default_value_t = TimeSignature::default())]
+    time_signature: TimeSignature,
 
-    /// The tempo type for the metronome. By default it's quarter note equals,
+    /// The tempo type for the metronome. By default, it's quarter note equals,
     /// but for time signatures like `6/8`, it'll be dotted quarter equals, and
-    /// for time signatures like `2/2`, it'll be half note equals.
+    /// for time signatures like `2/2`, it'll be half-note equals.
     #[arg(value_enum, short, long)]
     tempo_type: Option<TempoType>,
 
@@ -62,49 +54,19 @@ struct Cli {
     /// `2` represents splitting a beat into 2
     #[arg(short, long, default_value_t = 1, value_parser = clap::value_parser!(u8).range(1..))]
     subdivision: u8,
-
-    /// The subdivision setting. It gives you an ability to customize what beats
-    /// are played and what beats are silent for the subdivision. Use `0` for silent
-    /// beat, `1` for a beat that plays, and `-` for a beat to slur over.
-    ///
-    /// For example, if the subdivision is `4`, then `--subdivision-setting 01-1` will mean silent
-    /// the first beat, the second and third beat is slurred together, and the
-    /// fourth beat is played, by itself.
-    #[arg(short = 'u', long)]
-    subdivision_setting: Option<String>,
-}
-
-impl Cli {
-    fn validate_time_signature(&self) {
-        if let Err(err) = self.time_signature.parse::<TimeSignature>() {
-            Cli::command()
-                .error(clap::error::ErrorKind::InvalidValue, err)
-                .exit();
-        }
-    }
 }
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
-    // Check if time signature is valid
-    cli.validate_time_signature();
-
     let metronome_data = Arc::new(RwLock::new(MetronomeData::new(&cli)));
-
-    // Track the time stamp when the last metronome beat was played. Did this whole
-    // minus thing so that there is no awkward wait for the first metronome beat when
-    // the program first starts.
-    let mut last_beat_time = Instant::now() - Duration::from_secs(1_000);
-    let mut last_subdivided_beat_time = Instant::now();
 
     let mut ui = Ui::new(Arc::clone(&metronome_data));
     let metronome_sound = MetronomeSound::new()?;
-    // The sink variable that is returned from using the play audio function, saved
-    // so that it continues playing because if it's dropped then the audio stops
+    let mut metronome_beat_tracker = MetronomeBeatTracker::new(Arc::clone(&metronome_data));
+    // The sink variable returned from using the play audio function, saved
+    // so that it continues playing because if it's dropped, then the audio stops
     let mut _sink;
-
-    let mut tempo_measurer = TempoMeasurer::new();
 
     let (sender, receiver) = mpsc::channel::<UserInput>();
 
@@ -112,6 +74,7 @@ fn main() -> anyhow::Result<()> {
     let value = Arc::clone(&metronome_data);
     thread::spawn(move || -> anyhow::Result<()> {
         let metronome_data = value;
+        let mut tempo_measurer = TempoMeasurer::new();
 
         loop {
             let mut input_str = String::new();
@@ -152,21 +115,34 @@ fn main() -> anyhow::Result<()> {
     loop {
         thread::sleep(TICK_LENGTH);
 
-        if should_play_beat(&metronome_data.read().unwrap(), last_beat_time) {
-            last_beat_time = Instant::now();
-            last_subdivided_beat_time = Instant::now();
+        let (time_signature_is_eighths, beat_info, should_play_subdivision_beat, is_paused) = {
+            let m = metronome_data.read().unwrap();
 
-            let metronome_sound_type = metronome_data.read().unwrap().get_current_sound_type();
-            _sink = metronome_sound.play(metronome_sound_type)?;
-            ui.render()?;
+            (
+                m.time_signature_is_eighths(),
+                m.beat_info,
+                m.subdivision_setting.should_play_subdivision_beat(
+                    m.beat_info,
+                    m.time_signature_is_eighths(),
+                    m.subdivision() > 1,
+                ),
+                m.is_paused,
+            )
+        };
 
-            metronome_data.write().unwrap().next_beat()
-        } else if should_play_subdivided_beat(
-            &metronome_data.read().unwrap(),
-            last_subdivided_beat_time,
-        ) {
-            last_subdivided_beat_time = Instant::now();
-            _sink = metronome_sound.play(MetronomeSoundType::Subdivision)?;
+        if !is_paused && metronome_beat_tracker.should_play_beat() {
+            if should_play_subdivision_beat {
+                _sink = metronome_sound.play(MetronomeSoundType::from_beat_info(
+                    beat_info,
+                    time_signature_is_eighths,
+                ))?;
+            }
+
+            if metronome_beat_tracker.is_downbeat() {
+                ui.render()?;
+            }
+
+            metronome_beat_tracker.move_to_next_subdivided_beat();
         }
 
         // If got a message from the input thread
@@ -174,9 +150,9 @@ fn main() -> anyhow::Result<()> {
             metronome_data.write().unwrap().execute(&message);
 
             if let UserInput::Pause = message {
-                // Subtract last beat time by a huge amount so when the user resumes
+                // Subtract last beat time by a huge amount, so when the user resumes,
                 // there is no awkward wait, especially for slower tempo
-                last_beat_time -= Duration::from_secs(1_000);
+                metronome_beat_tracker.offset_beat_timestamp();
             }
 
             ui.render()?;

@@ -1,5 +1,7 @@
 use std::io::Cursor;
 
+use super::data::beat::BeatInfo;
+
 static METRONOME_SOUNDS: &[&[u8]] = &[
     include_bytes!("../audio/beat1.mp3"),
     include_bytes!("../audio/beat2.mp3"),
@@ -21,22 +23,25 @@ impl MetronomeSoundType {
     /// Get the appropriate metronome sound to play based on the current beat of
     /// the metronome. If the time signature ends in 8, then change it up so that
     /// it gives like a subdivided feel
-    pub fn from_beat(beat: u8, is_eighths_time_signature: bool) -> Self {
+    pub fn from_beat_info(beat_info: BeatInfo, is_eighths_time_signature: bool) -> Self {
         match is_eighths_time_signature {
             true => {
-                if beat == 0 {
+                if beat_info == (0, 0) {
                     Self::Accented
-                } else if beat.is_multiple_of(3) {
+                } else if beat_info.current_beat.is_multiple_of(3) && beat_info.subdivided_beat == 0
+                {
                     Self::Beat
                 } else {
                     Self::Subdivision
                 }
             }
             false => {
-                if beat == 0 {
+                if beat_info == (0, 0) {
                     Self::Accented
-                } else {
+                } else if beat_info.subdivided_beat == 0 {
                     Self::Beat
+                } else {
+                    Self::Subdivision
                 }
             }
         }

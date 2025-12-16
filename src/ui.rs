@@ -1,6 +1,6 @@
 use crossterm::{
     QueueableCommand, cursor,
-    style::{Print, PrintStyledContent, Stylize},
+    style::{Print, Stylize},
 };
 use std::{
     fmt::{self, Write as FmtWrite},
@@ -13,27 +13,25 @@ use crate::metronome::data::MetronomeData;
 
 const SCREEN_TEXT_CAPACITY: usize = 256;
 
-fn get_beat_to_print(beat_index: u8, is_eighths_time_signature: bool) -> String {
-    let beat = match is_eighths_time_signature {
+fn get_beat_to_print(beat_index: u8, is_eighths_time_signature: bool) -> char {
+    match is_eighths_time_signature {
         true => {
             if beat_index == 0 {
-                "X"
+                'X'
             } else if beat_index.is_multiple_of(3) {
-                "x"
+                'x'
             } else {
-                "."
+                '.'
             }
         }
         false => {
             if beat_index == 0 {
-                "X"
+                'X'
             } else {
-                "x"
+                'x'
             }
         }
-    };
-
-    String::from(beat)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -71,30 +69,42 @@ impl Ui {
 
     fn write_info_text(&mut self) -> fmt::Result {
         let metronome_data = self.metronome_data.read().unwrap();
-        let subdivision = if metronome_data.subdivision() == 1 {
-            String::from("None")
-        } else {
-            metronome_data.subdivision().to_string()
-        };
 
-        writeln!(
+        write!(
             self.screen_text,
-            "Tempo: {} = {}\t\tTime Signature = {}\t\tSubdivision = {}",
+            "Tempo: {} = {}\t\tTime Signature = {}\t\tSubdivision = ",
             metronome_data.tempo_type(),
             metronome_data.tempo(),
             metronome_data.time_signature(),
-            subdivision,
-        )
+        )?;
+
+        if metronome_data.subdivision() <= 1 {
+            write!(self.screen_text, "None")?;
+        } else {
+            write!(self.screen_text, "{}", metronome_data.subdivision())?;
+        };
+
+        if !metronome_data.subdivision_setting.play_beat.is_empty() {
+            write!(
+                self.screen_text,
+                " ({})",
+                metronome_data.subdivision_setting
+            )?;
+        }
+
+        writeln!(self.screen_text)?;
+
+        Ok(())
     }
 
     fn write_metronome_beat_text(&mut self) -> fmt::Result {
         write!(self.screen_text, "[    ")?;
 
-        let (beats_per_measure, beat, is_eighths_time_signature) = {
+        let (beats_per_measure, beat_info, is_eighths_time_signature) = {
             let metronome_data = self.metronome_data.read().unwrap();
             (
                 metronome_data.time_signature().0,
-                metronome_data.beat,
+                metronome_data.beat_info,
                 metronome_data.time_signature_is_eighths(),
             )
         };
@@ -102,12 +112,8 @@ impl Ui {
         for i in 0..beats_per_measure {
             let beat_to_print = get_beat_to_print(i, is_eighths_time_signature);
 
-            if i == beat {
-                write!(
-                    self.screen_text,
-                    "{}",
-                    PrintStyledContent(beat_to_print.italic().blue())
-                )?;
+            if i == beat_info.current_beat {
+                write!(self.screen_text, "{}", beat_to_print.italic().blue())?;
             } else {
                 write!(self.screen_text, "{}", beat_to_print)?;
             }

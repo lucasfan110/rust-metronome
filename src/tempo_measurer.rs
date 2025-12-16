@@ -1,5 +1,7 @@
 use std::time::{Duration, Instant};
 
+const DEFAULT_CAPACITY: usize = 8;
+
 #[derive(Debug, Clone)]
 pub struct TempoMeasurer {
     timestamps: Vec<Instant>,
@@ -8,7 +10,7 @@ pub struct TempoMeasurer {
 impl TempoMeasurer {
     pub fn new() -> Self {
         Self {
-            timestamps: Vec::new(),
+            timestamps: Vec::with_capacity(DEFAULT_CAPACITY),
         }
     }
 
@@ -34,5 +36,6 @@ impl TempoMeasurer {
 
     pub fn clear(&mut self) {
         self.timestamps.clear();
+        self.timestamps.shrink_to(DEFAULT_CAPACITY);
     }
 }
