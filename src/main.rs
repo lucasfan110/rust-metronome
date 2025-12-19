@@ -117,7 +117,7 @@ fn main() -> anyhow::Result<()> {
 
         let (time_signature_is_eighths, beat_info, should_play_subdivision_beat, is_paused) = {
             let m = metronome_data.read().unwrap();
-
+        
             (
                 m.time_signature_is_eighths(),
                 m.beat_info,

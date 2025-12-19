@@ -23,7 +23,10 @@ pub fn print_help() {
     );
     println!(
         "\tExample: `ss -x` with a subdivision of 2 will only play downbeat. \
-        Type `ss` to clear subdivision setting. You can set subdivision setting \
+        Type `ss` to clear subdivision setting."
+    );
+    println!(
+        "\tYou can set subdivision setting \
         if there are no subdivision and the time signature is eights, to change its \
         subdivision"
     );

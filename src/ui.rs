@@ -37,7 +37,7 @@ fn get_beat_to_print(beat_index: u8, is_eighths_time_signature: bool) -> char {
 #[derive(Debug, Clone)]
 pub struct Ui {
     screen_text: String,
-    pub metronome_data: Arc<RwLock<MetronomeData>>,
+    metronome_data: Arc<RwLock<MetronomeData>>,
 }
 
 impl Ui {
@@ -56,11 +56,13 @@ impl Ui {
         self.write_info_text().unwrap();
         self.write_metronome_beat_text().unwrap();
 
+        let screen_text = mem::replace(
+            &mut self.screen_text,
+            String::with_capacity(SCREEN_TEXT_CAPACITY),
+        );
+
         io::stdout()
-            .queue(Print(mem::replace(
-                &mut self.screen_text,
-                String::with_capacity(SCREEN_TEXT_CAPACITY),
-            )))?
+            .queue(Print(screen_text))?
             .queue(cursor::RestorePosition)?
             .flush()?;
 
