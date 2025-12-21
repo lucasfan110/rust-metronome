@@ -16,6 +16,8 @@ pub enum UserInput {
     SetSubdivision(String),
     SetSubdivisionSetting(String),
     Unknown(String),
+    SetTimer(String),
+    StopTimer,
 }
 
 impl FromStr for UserInput {
@@ -43,6 +45,14 @@ impl FromStr for UserInput {
             "subdivision" | "s" => SetSubdivision(get_nth_arg(1)),
             "subdivision-setting" | "ss" => SetSubdivisionSetting(get_nth_arg(1)),
             "tap" => Tap,
+            "timer" => {
+                let second_arg = get_nth_arg(1);
+
+                match second_arg.as_str() {
+                    "stop" => StopTimer,
+                    _ => SetTimer(second_arg),
+                }
+            }
             command => Unknown(command.to_string()),
         })
     }

@@ -1,3 +1,4 @@
+use crate::timer::render_tracker::TimerRenderTracker;
 use clap::Parser;
 use crossterm::{
     ExecutableCommand,
@@ -19,6 +20,7 @@ use user_input::UserInput;
 
 mod metronome;
 mod tempo_measurer;
+mod timer;
 mod ui;
 mod user_input;
 
@@ -64,6 +66,7 @@ fn main() -> anyhow::Result<()> {
     let mut ui = Ui::new(Arc::clone(&metronome_data));
     let metronome_sound = MetronomeSound::new()?;
     let mut metronome_beat_tracker = MetronomeBeatTracker::new(Arc::clone(&metronome_data));
+    let mut timer_render_tracker = TimerRenderTracker::new(Arc::clone(&metronome_data));
     // The sink variable returned from using the play audio function, saved
     // so that it continues playing because if it's dropped, then the audio stops
     let mut _sink;
@@ -115,34 +118,40 @@ fn main() -> anyhow::Result<()> {
     loop {
         thread::sleep(TICK_LENGTH);
 
-        let (time_signature_is_eighths, beat_info, should_play_subdivision_beat, is_paused) = {
-            let m = metronome_data.read().unwrap();
-        
-            (
-                m.time_signature_is_eighths(),
-                m.beat_info,
-                m.subdivision_setting.should_play_subdivision_beat(
-                    m.beat_info,
-                    m.time_signature_is_eighths(),
-                    m.subdivision() > 1,
-                ),
-                m.is_paused,
-            )
-        };
+        if !metronome_data.read().unwrap().is_paused && metronome_beat_tracker.should_play_beat() {
+            metronome_beat_tracker.move_to_next_subdivided_beat();
 
-        if !is_paused && metronome_beat_tracker.should_play_beat() {
+            let d = metronome_data.read().unwrap();
+            let should_play_subdivision_beat = d.subdivision_setting.should_play_subdivision_beat(
+                d.beat_info,
+                d.time_signature_is_eighths(),
+                d.subdivision() > 1,
+            );
+
             if should_play_subdivision_beat {
                 _sink = metronome_sound.play(MetronomeSoundType::from_beat_info(
-                    beat_info,
-                    time_signature_is_eighths,
+                    d.beat_info,
+                    d.time_signature_is_eighths(),
                 ))?;
             }
+
+            drop(d);
 
             if metronome_beat_tracker.is_downbeat() {
                 ui.render()?;
             }
+        }
 
-            metronome_beat_tracker.move_to_next_subdivided_beat();
+        if timer_render_tracker.should_render_timer() {
+            ui.render()?;
+            timer_render_tracker.just_rendered();
+
+            let d = metronome_data.read().unwrap();
+            let timer = d.timer.as_ref().unwrap();
+
+            if timer.time_remaining().is_zero() {
+                timer.play_alarm()?;
+            }
         }
 
         // If got a message from the input thread

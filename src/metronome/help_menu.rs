@@ -31,6 +31,10 @@ pub fn print_help() {
         subdivision"
     );
     println!(
+        "timer <TIME> | stop: Set a timer, with the format of `HH:MM:SS`, \
+        where hours and minutes are optional. Use `timer stop` to stop the timer."
+    );
+    println!(
         "tap: Enters tap mode. Press return for each beat, and after 4 taps, the \
         tempo of the metronome will automatically change to the tapped tempo. Press \
         `q` to stop"

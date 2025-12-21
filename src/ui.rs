@@ -34,7 +34,6 @@ fn get_beat_to_print(beat_index: u8, is_eighths_time_signature: bool) -> char {
     }
 }
 
-#[derive(Debug, Clone)]
 pub struct Ui {
     screen_text: String,
     metronome_data: Arc<RwLock<MetronomeData>>,
@@ -55,6 +54,7 @@ impl Ui {
 
         self.write_info_text().unwrap();
         self.write_metronome_beat_text().unwrap();
+        self.write_timer_text().unwrap();
 
         let screen_text = mem::replace(
             &mut self.screen_text,
@@ -123,7 +123,15 @@ impl Ui {
             write!(self.screen_text, " ")?;
         }
 
-        write!(self.screen_text, "   ]")?;
+        writeln!(self.screen_text, "   ]")?;
+
+        Ok(())
+    }
+
+    fn write_timer_text(&mut self) -> fmt::Result {
+        if let Some(ref timer) = self.metronome_data.read().unwrap().timer {
+            writeln!(self.screen_text, "TIMER: {}", timer.time_remaining_str())?;
+        }
 
         Ok(())
     }

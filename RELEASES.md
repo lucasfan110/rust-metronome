@@ -1,3 +1,10 @@
+## Version 0.5.0 (12/20/2025)
+
+* Added timer to the metronome
+* Usage: `timer HH:MM:SS`, where hour and minutes are optional
+* Alarm will ring once the timer hits zero
+* Use `timer stop` to stop the timer.
+
 ## Version 0.4.0 (12/15/2025)
 
 * Added subdivision settings, allowing user to choose which subdivided beat to play

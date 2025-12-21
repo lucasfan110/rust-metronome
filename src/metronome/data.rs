@@ -1,3 +1,4 @@
+use crate::timer::Timer;
 use crate::{Cli, metronome::help_menu::print_help, user_input::UserInput};
 use TempoType::*;
 use anyhow::anyhow;
@@ -146,7 +147,6 @@ impl Display for TimeSignature {
     }
 }
 
-#[derive(Debug, Clone)]
 pub struct MetronomeData {
     tempo: u16,
     pub beat_info: BeatInfo,
@@ -157,6 +157,7 @@ pub struct MetronomeData {
     duration_per_subdivided_beat: Duration,
     pub is_paused: bool,
     pub tap_mode: bool,
+    pub timer: Option<Timer>,
 }
 
 // Getters and setters
@@ -224,10 +225,11 @@ impl MetronomeData {
             tempo_type,
             subdivision: cli.subdivision,
             subdivision_setting: SubdivisionSetting::default(),
-            beat_info: (0, 0).into(),
+            beat_info: (cli.time_signature.0 - 1, cli.subdivision - 1).into(),
             duration_per_subdivided_beat: Duration::ZERO,
             is_paused: false,
             tap_mode: false,
+            timer: None,
         };
 
         new_value.recalculate_duration_per_subdivided_beat();
@@ -292,6 +294,13 @@ impl MetronomeData {
             Unknown(command) => {
                 println!("Unknown command `{}`!", command);
             }
+            SetTimer(duration) => match Timer::from_str(duration) {
+                Ok(t) => self.timer = Some(t),
+                Err(_) => {
+                    println!("Invalid timer string! Format: HH:MM:SS, hour and minutes optional")
+                }
+            },
+            StopTimer => self.timer = None,
         };
 
         if self.is_paused {

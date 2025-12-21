@@ -45,7 +45,6 @@ impl BeatInfo {
     }
 }
 
-#[derive(Debug, Clone)]
 pub struct MetronomeBeatTracker {
     metronome_data: Arc<RwLock<MetronomeData>>,
     last_beat_timestamp: Instant,
