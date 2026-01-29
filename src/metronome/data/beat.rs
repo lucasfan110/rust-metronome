@@ -5,19 +5,21 @@ use std::{
 
 use super::MetronomeData;
 
-fn modulo_increment(num: &mut u8, modulo_by: u8) {
+pub mod accent;
+
+fn modulo_increment(num: &mut i32, modulo_by: i32) {
     *num += 1;
     *num %= modulo_by;
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct BeatInfo {
-    pub current_beat: u8,
-    pub subdivided_beat: u8,
+    pub current_beat: i32,
+    pub subdivided_beat: i32,
 }
 
-impl From<(u8, u8)> for BeatInfo {
-    fn from(value: (u8, u8)) -> Self {
+impl From<(i32, i32)> for BeatInfo {
+    fn from(value: (i32, i32)) -> Self {
         Self {
             current_beat: value.0,
             subdivided_beat: value.1,
@@ -25,14 +27,14 @@ impl From<(u8, u8)> for BeatInfo {
     }
 }
 
-impl PartialEq<(u8, u8)> for BeatInfo {
-    fn eq(&self, other: &(u8, u8)) -> bool {
+impl PartialEq<(i32, i32)> for BeatInfo {
+    fn eq(&self, other: &(i32, i32)) -> bool {
         self.current_beat == other.0 && self.subdivided_beat == other.1
     }
 }
 
 impl BeatInfo {
-    pub fn next_subdivided_beat(&mut self, num_beats: u8, num_subdivided_beats: u8) {
+    pub fn next_subdivided_beat(&mut self, num_beats: i32, num_subdivided_beats: i32) {
         modulo_increment(&mut self.subdivided_beat, num_subdivided_beats);
 
         if self.subdivided_beat == 0 {
@@ -51,7 +53,7 @@ pub struct MetronomeBeatTracker {
 }
 
 fn instant_now_offset() -> Instant {
-    const DURATION_OFFSET: Duration = Duration::from_secs(1_000);
+    const DURATION_OFFSET: Duration = Duration::from_secs(100);
     Instant::now() - DURATION_OFFSET
 }
 

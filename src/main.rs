@@ -4,9 +4,13 @@ use crossterm::{
     ExecutableCommand,
     terminal::{Clear, ClearType},
 };
+use input_thread::start_input_thread;
 use metronome::{
-    data::{MetronomeData, TEMPO_RANGE, TempoType, TimeSignature, beat::MetronomeBeatTracker},
-    sound::{MetronomeSound, MetronomeSoundType},
+    data::{
+        MetronomeData, SUBDIVISION_RANGE, TEMPO_RANGE, TempoType, TimeSignature,
+        beat::{MetronomeBeatTracker, accent::get_metronome_beat_accent},
+    },
+    sound::play_metronome_sound,
 };
 use std::{
     io,
@@ -14,10 +18,11 @@ use std::{
     thread,
     time::Duration,
 };
-use tempo_measurer::TempoMeasurer;
+use timer::play_timer_alarm;
 use ui::Ui;
 use user_input::UserInput;
 
+mod input_thread;
 mod metronome;
 mod tempo_measurer;
 mod timer;
@@ -38,8 +43,8 @@ const TAPS_NEEDED: usize = 4;
 struct Cli {
     /// The tempo for the metronome, in beats per minute. Cannot be less than 10,
     /// or greater than 400
-    #[arg(default_value_t = 60, value_parser = clap::value_parser!(u16).range(TEMPO_RANGE))]
-    tempo: u16,
+    #[arg(default_value_t = 60, value_parser = clap::value_parser!(i32).range(TEMPO_RANGE))]
+    tempo: i32,
 
     /// The time signature for the metronome, in the format of a fraction. For example,
     /// `4/4` or `6/8`
@@ -54,8 +59,8 @@ struct Cli {
 
     /// The subdivision for the metronome, in terms of numbers. For example,
     /// `2` represents splitting a beat into 2
-    #[arg(short, long, default_value_t = 1, value_parser = clap::value_parser!(u8).range(1..))]
-    subdivision: u8,
+    #[arg(short, long, default_value_t = 1, value_parser = clap::value_parser!(i32).range(SUBDIVISION_RANGE))]
+    subdivision: i32,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -64,54 +69,16 @@ fn main() -> anyhow::Result<()> {
     let metronome_data = Arc::new(RwLock::new(MetronomeData::new(&cli)));
 
     let mut ui = Ui::new(Arc::clone(&metronome_data));
-    let metronome_sound = MetronomeSound::new()?;
     let mut metronome_beat_tracker = MetronomeBeatTracker::new(Arc::clone(&metronome_data));
     let mut timer_render_tracker = TimerRenderTracker::new(Arc::clone(&metronome_data));
-    // The sink variable returned from using the play audio function, saved
-    // so that it continues playing because if it's dropped, then the audio stops
-    let mut _sink;
+
+    let mut _metronome_sound_data;
+    let mut _timer_alarm_sound_data;
 
     let (sender, receiver) = mpsc::channel::<UserInput>();
 
     // The thread for input
-    let value = Arc::clone(&metronome_data);
-    thread::spawn(move || -> anyhow::Result<()> {
-        let metronome_data = value;
-        let mut tempo_measurer = TempoMeasurer::new();
-
-        loop {
-            let mut input_str = String::new();
-
-            io::stdin().read_line(&mut input_str)?;
-            io::stdout().execute(Clear(ClearType::All))?;
-
-            let input_str = input_str.trim();
-
-            if metronome_data.read().unwrap().tap_mode {
-                if matches!(input_str, "quit" | "q") {
-                    metronome_data.write().unwrap().tap_mode = false;
-                    tempo_measurer.clear();
-                    sender.send(UserInput::Resume)?;
-                    continue;
-                }
-
-                tempo_measurer.tap();
-
-                if tempo_measurer.num_tapped() >= TAPS_NEEDED {
-                    sender.send(UserInput::SetTempoDirect(tempo_measurer.calculate_tempo()))?;
-                } else {
-                    sender.send(UserInput::Clear)?;
-                }
-
-                continue;
-            }
-
-            let user_input = input_str.parse::<UserInput>();
-            if let Ok(user_input) = user_input {
-                sender.send(user_input)?;
-            }
-        }
-    });
+    start_input_thread(Arc::clone(&metronome_data), sender);
 
     io::stdout().execute(Clear(ClearType::All))?;
 
@@ -129,10 +96,8 @@ fn main() -> anyhow::Result<()> {
             );
 
             if should_play_subdivision_beat {
-                _sink = metronome_sound.play(MetronomeSoundType::from_beat_info(
-                    d.beat_info,
-                    d.time_signature_is_eighths(),
-                ))?;
+                _metronome_sound_data =
+                    play_metronome_sound(get_metronome_beat_accent(d.beat_accents(), d.beat_info))?;
             }
 
             drop(d);
@@ -150,7 +115,7 @@ fn main() -> anyhow::Result<()> {
             let timer = d.timer.as_ref().unwrap();
 
             if timer.time_remaining().is_zero() {
-                timer.play_alarm()?;
+                _timer_alarm_sound_data = play_timer_alarm()?;
             }
         }
 

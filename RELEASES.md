@@ -1,3 +1,11 @@
+## Version 0.6.0 (01/29/2026)
+
+* Added `7/8` time signature support. Right now only the pattern `X..x.x.` is supported. Other patterns will be added.
+
+* Changed code structure to accommodate irregular time signatures
+
+* Updated `clap` to version 4.5.56
+
 ## Version 0.5.0 (12/20/2025)
 
 * Added timer to the metronome
@@ -9,8 +17,8 @@
 
 * Added subdivision settings, allowing user to choose which subdivided beat to play
 * Changed the way subdivision setting works for time signatures that end in eights
-    * If there is no subdivision and a subdivision setting is applied, it is applied
-      to the "subdivided" beat instead
+  * If there is no subdivision and a subdivision setting is applied, it is applied
+    to the "subdivided" beat instead
 * Many code changes.
 
 ## Version 0.3.4 (11/27/2025)
@@ -28,7 +36,7 @@
 
 * Updated clap to 4.5.53
 * Quality of life changes:
-    * Always display if the metronome is paused or in tap mode.
+  * Always display if the metronome is paused or in tap mode.
 
 ## Version 0.3.1 (11/16/2025)
 

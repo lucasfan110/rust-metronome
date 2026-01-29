@@ -3,6 +3,7 @@ use crate::{Cli, metronome::help_menu::print_help, user_input::UserInput};
 use TempoType::*;
 use anyhow::anyhow;
 use beat::BeatInfo;
+use beat::accent::{MetronomeBeatAccent, get_beat_accents_from_time_signature};
 use clap::ValueEnum;
 use std::{
     fmt::{self, Display, Formatter},
@@ -16,12 +17,24 @@ use subdivision_setting::SubdivisionSetting;
 pub mod beat;
 pub mod subdivision_setting;
 
-pub const TEMPO_MIN: u16 = 10;
-pub const TEMPO_MAX: u16 = 400;
+pub const TEMPO_MIN: i32 = 10;
+pub const TEMPO_MAX: i32 = 400;
 pub const TEMPO_RANGE: RangeInclusive<i64> = (TEMPO_MIN as i64)..=(TEMPO_MAX as i64);
 
-pub const fn is_tempo_valid(tempo: u16) -> bool {
-    TEMPO_MIN <= tempo && tempo <= TEMPO_MAX
+pub const SUBDIVISION_MIN: i32 = 0;
+pub const SUBDIVISION_MAX: i32 = 8;
+pub const SUBDIVISION_RANGE: RangeInclusive<i64> =
+    (SUBDIVISION_MIN as i64)..=(SUBDIVISION_MAX as i64);
+
+pub fn is_tempo_valid(tempo: i32) -> bool {
+    TEMPO_RANGE.contains(&(tempo as i64))
+}
+pub fn is_subdivision_valid(subdivision: i32) -> bool {
+    SUBDIVISION_RANGE.contains(&(subdivision as i64))
+}
+
+fn is_power_of_two_i32(x: i32) -> bool {
+    x > 0 && (x & (x - 1)) == 0
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, ValueEnum, Debug)]
@@ -96,15 +109,15 @@ impl FromStr for TempoType {
             "dotted-quarter" => Ok(DottedQuarter),
             "dotted-half" => Ok(DottedHalf),
             "dotted-whole" => Ok(DottedWhole),
-            _ => Err(anyhow!("Invalid tempo type {}!", s)),
+            _ => Err(anyhow!("Invalid tempo type `{}`!", s)),
         }
     }
 }
 
-/// The time signature, with the first u8 representing the number of beats in a
-/// measure, and the second u8 representing what each beat is equivalent to
+/// The time signature, with the first i32 representing the number of beats in a
+/// measure, and the second i32 representing what each beat is equivalent to
 #[derive(Debug, Clone, Copy)]
-pub struct TimeSignature(pub u8, pub u8);
+pub struct TimeSignature(pub i32, pub i32);
 
 impl Default for TimeSignature {
     fn default() -> Self {
@@ -124,16 +137,18 @@ impl FromStr for TimeSignature {
             ));
         }
 
-        let numerator: u8 = numbers[0].parse()?;
-        let denominator: u8 = numbers[1].parse()?;
+        let numerator: i32 = numbers[0].parse()?;
+        let denominator: i32 = numbers[1].parse()?;
 
-        if numerator == 0 {
-            return Err(anyhow!("Numerator on the time signature cannot be 0!"));
+        if numerator < 1 {
+            return Err(anyhow!(
+                "Numerator on the time signature cannot be less than 1!"
+            ));
         }
 
-        if denominator == 0 || !denominator.is_power_of_two() {
+        if denominator < 1 || !is_power_of_two_i32(denominator) {
             return Err(anyhow!(
-                "Denominator on the time signature must be a power of 2 and cannot be 0!"
+                "Denominator on the time signature must be a power of 2 and greater than 0!"
             ));
         }
 
@@ -148,11 +163,12 @@ impl Display for TimeSignature {
 }
 
 pub struct MetronomeData {
-    tempo: u16,
+    tempo: i32,
     pub beat_info: BeatInfo,
     tempo_type: TempoType,
     time_signature: TimeSignature,
-    subdivision: u8,
+    beat_accents: Vec<MetronomeBeatAccent>,
+    subdivision: i32,
     pub subdivision_setting: SubdivisionSetting,
     duration_per_subdivided_beat: Duration,
     pub is_paused: bool,
@@ -174,29 +190,30 @@ impl MetronomeData {
             Duration::from_secs_f64(60.0 / new_tempo / self.subdivision as f64);
     }
 
-    pub fn change_tempo(&mut self, tempo: u16) {
+    pub fn set_tempo(&mut self, tempo: i32) {
         self.tempo = tempo.clamp(TEMPO_MIN, TEMPO_MAX);
         self.beat_info.reset();
         self.recalculate_duration_per_subdivided_beat();
     }
 
-    pub fn change_tempo_type(&mut self, tempo_type: TempoType) {
+    pub fn set_tempo_type(&mut self, tempo_type: TempoType) {
         self.tempo_type = tempo_type;
-        self.change_tempo(self.tempo);
+        self.set_tempo(self.tempo);
     }
 
-    pub fn change_time_signature(&mut self, time_signature: TimeSignature) {
+    pub fn set_time_signature(&mut self, time_signature: TimeSignature) {
         self.time_signature = time_signature;
-        self.change_tempo_type(TempoType::get_default_based(time_signature));
+        self.set_tempo_type(TempoType::get_default_based(time_signature));
+        self.beat_accents = get_beat_accents_from_time_signature(self.time_signature);
     }
 
-    pub fn change_subdivision(&mut self, subdivision: u8) {
+    pub fn set_subdivision(&mut self, subdivision: i32) {
         self.subdivision = subdivision;
         self.recalculate_duration_per_subdivided_beat();
         self.beat_info.reset();
     }
 
-    pub fn tempo(&self) -> u16 {
+    pub fn tempo(&self) -> i32 {
         self.tempo
     }
 
@@ -204,12 +221,16 @@ impl MetronomeData {
         self.tempo_type
     }
 
-    pub fn subdivision(&self) -> u8 {
+    pub fn subdivision(&self) -> i32 {
         self.subdivision
     }
 
     pub fn time_signature(&self) -> TimeSignature {
         self.time_signature
+    }
+
+    pub fn beat_accents(&self) -> &[MetronomeBeatAccent] {
+        self.beat_accents.as_slice()
     }
 }
 
@@ -222,6 +243,7 @@ impl MetronomeData {
         let mut new_value = Self {
             tempo: cli.tempo,
             time_signature: cli.time_signature,
+            beat_accents: get_beat_accents_from_time_signature(cli.time_signature),
             tempo_type,
             subdivision: cli.subdivision,
             subdivision_setting: SubdivisionSetting::default(),
@@ -251,29 +273,32 @@ impl MetronomeData {
             }
             Help => print_help(),
             Clear => {}
-            SetTempo(tempo_str) => match tempo_str.parse::<u16>() {
+            SetTempo(tempo_str) => match tempo_str.parse::<i32>() {
                 Ok(tempo) if is_tempo_valid(tempo) => {
-                    self.change_tempo(tempo);
+                    self.set_tempo(tempo);
                 }
                 _ => println!(
                     "Invalid tempo `{}`! Must be a valid whole number between {}-{}!",
                     tempo_str, TEMPO_MIN, TEMPO_MAX
                 ),
             },
-            SetTempoDirect(tempo) => self.change_tempo(*tempo),
+            SetTempoDirect(tempo) => self.set_tempo(*tempo),
             SetTimeSignature(time_signature_str) => {
                 match time_signature_str.parse::<TimeSignature>() {
-                    Ok(time_signature) => self.change_time_signature(time_signature),
+                    Ok(time_signature) => self.set_time_signature(time_signature),
                     Err(_) => println!("Invalid time signature `{}`!", time_signature_str),
                 }
             }
             SetTempoType(tempo_type_str) => match tempo_type_str.parse::<TempoType>() {
-                Ok(tempo_type) => self.change_tempo_type(tempo_type),
+                Ok(tempo_type) => self.set_tempo_type(tempo_type),
                 Err(_) => println!("Invalid tempo type {}!", tempo_type_str),
             },
-            SetSubdivision(subdivision_str) => {
-                self.change_subdivision(subdivision_str.parse::<u8>().unwrap_or(1).max(1))
-            }
+            SetSubdivision(subdivision_str) => match subdivision_str.parse::<i32>() {
+                Ok(s) if is_subdivision_valid(s) => self.set_subdivision(s.max(1)),
+                _ => {
+                    println!("Invalid subdivision {}!", subdivision_str)
+                }
+            },
             SetSubdivisionSetting(subdivision_setting_str) => {
                 match subdivision_setting_str.parse::<SubdivisionSetting>() {
                     Ok(subdivision_setting) => self.subdivision_setting = subdivision_setting,
@@ -297,7 +322,7 @@ impl MetronomeData {
             SetTimer(duration) => match Timer::from_str(duration) {
                 Ok(t) => self.timer = Some(t),
                 Err(_) => {
-                    println!("Invalid timer string! Format: HH:MM:SS, hour and minutes optional")
+                    println!("Invalid timer string! Format: HH:MM:SS, hours optional")
                 }
             },
             StopTimer => self.timer = None,

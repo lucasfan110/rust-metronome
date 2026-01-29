@@ -10,7 +10,7 @@ pub enum UserInput {
     Clear,
     Tap,
     SetTempo(String),
-    SetTempoDirect(u16),
+    SetTempoDirect(i32),
     SetTimeSignature(String),
     SetTempoType(String),
     SetSubdivision(String),

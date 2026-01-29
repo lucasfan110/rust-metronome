@@ -9,30 +9,35 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use crate::metronome::data::MetronomeData;
+use crate::metronome::data::{
+    MetronomeData,
+    beat::{BeatInfo, accent::get_metronome_beat_accent},
+};
 
 const SCREEN_TEXT_CAPACITY: usize = 256;
 
-fn get_beat_to_print(beat_index: u8, is_eighths_time_signature: bool) -> char {
-    match is_eighths_time_signature {
-        true => {
-            if beat_index == 0 {
-                'X'
-            } else if beat_index.is_multiple_of(3) {
-                'x'
-            } else {
-                '.'
-            }
-        }
-        false => {
-            if beat_index == 0 {
-                'X'
-            } else {
-                'x'
-            }
-        }
-    }
-}
+const BEAT_CHAR: [char; 3] = ['X', 'x', '.'];
+
+// fn get_beat_to_print(beat_index: i32, is_eighths_time_signature: bool) -> char {
+//     match is_eighths_time_signature {
+//         true => {
+//             if beat_index == 0 {
+//                 'X'
+//             } else if beat_index % 3 == 0 {
+//                 'x'
+//             } else {
+//                 '.'
+//             }
+//         }
+//         false => {
+//             if beat_index == 0 {
+//                 'X'
+//             } else {
+//                 'x'
+//             }
+//         }
+//     }
+// }
 
 pub struct Ui {
     screen_text: String,
@@ -102,19 +107,16 @@ impl Ui {
     fn write_metronome_beat_text(&mut self) -> fmt::Result {
         write!(self.screen_text, "[    ")?;
 
-        let (beats_per_measure, beat_info, is_eighths_time_signature) = {
-            let metronome_data = self.metronome_data.read().unwrap();
-            (
-                metronome_data.time_signature().0,
-                metronome_data.beat_info,
-                metronome_data.time_signature_is_eighths(),
-            )
-        };
+        let data = self.metronome_data.read().unwrap();
+        let beats_per_measure = data.time_signature().0;
 
         for i in 0..beats_per_measure {
-            let beat_to_print = get_beat_to_print(i, is_eighths_time_signature);
+            // let beat_to_print = get_beat_to_print(i, data.time_signature_is_eighths());
+            let current_beat_accent =
+                get_metronome_beat_accent(data.beat_accents(), BeatInfo::from((i, 0)));
+            let beat_to_print = BEAT_CHAR[current_beat_accent as usize];
 
-            if i == beat_info.current_beat {
+            if i == data.beat_info.current_beat {
                 write!(self.screen_text, "{}", beat_to_print.italic().blue())?;
             } else {
                 write!(self.screen_text, "{}", beat_to_print)?;

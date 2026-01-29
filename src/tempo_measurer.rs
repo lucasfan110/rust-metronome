@@ -18,7 +18,7 @@ impl TempoMeasurer {
         self.timestamps.push(Instant::now());
     }
 
-    pub fn calculate_tempo(&self) -> u16 {
+    pub fn calculate_tempo(&self) -> i32 {
         let total_duration = self
             .timestamps
             .windows(2)
@@ -27,7 +27,7 @@ impl TempoMeasurer {
             });
 
         let secs_per_beat = total_duration.as_secs_f64() / (self.timestamps.len() - 1) as f64;
-        (1.0 / secs_per_beat * 60.0) as u16
+        (1.0 / secs_per_beat * 60.0) as i32
     }
 
     pub fn num_tapped(&self) -> usize {

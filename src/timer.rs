@@ -16,24 +16,32 @@ fn create_infinite_playback(audio_data: &'static [u8]) -> anyhow::Result<impl So
     Ok(source_looped)
 }
 
+pub fn play_timer_alarm() -> anyhow::Result<(rodio::OutputStream, rodio::Sink)> {
+    let mut stream_handler = rodio::OutputStreamBuilder::open_default_stream()?;
+    stream_handler.log_on_drop(false);
+
+    let sink = rodio::Sink::connect_new(stream_handler.mixer());
+
+    let source = create_infinite_playback(ALARM_AUDIO_DATA)?;
+
+    sink.append(source);
+    sink.play();
+
+    Ok((stream_handler, sink))
+}
+
+#[derive(Debug, Clone)]
 pub struct Timer {
     created_timestamp: Instant,
     duration: Duration,
-    sink: rodio::Sink,
-    _stream_handler: rodio::OutputStream,
 }
 
 impl Timer {
-    fn new(duration: Duration) -> Result<Self, rodio::StreamError> {
-        let mut stream_handler = rodio::OutputStreamBuilder::open_default_stream()?;
-        stream_handler.log_on_drop(false);
-
-        Ok(Self {
+    fn new(duration: Duration) -> Self {
+        Self {
             created_timestamp: Instant::now(),
             duration,
-            sink: rodio::Sink::connect_new(stream_handler.mixer()),
-            _stream_handler: stream_handler,
-        })
+        }
     }
 
     fn duration_to_string(duration: Duration) -> String {
@@ -68,15 +76,6 @@ impl Timer {
             .checked_sub(self.created_timestamp.elapsed())
             .unwrap_or(Duration::ZERO)
     }
-
-    pub fn play_alarm(&self) -> anyhow::Result<()> {
-        let source = create_infinite_playback(ALARM_AUDIO_DATA)?;
-
-        self.sink.append(source);
-        self.sink.play();
-
-        Ok(())
-    }
 }
 
 impl FromStr for Timer {
@@ -87,17 +86,45 @@ impl FromStr for Timer {
             return Err(anyhow!("Timer string cannot be empty"));
         }
 
-        let mut times = s.split(':').rev();
+        let times = s.split(":").collect::<Vec<&str>>();
 
-        let mut get_next_time = || times.next().map(u64::from_str).transpose();
+        if times.len() < 2 {
+            return Err(anyhow!("Must include minutes and seconds"));
+        }
 
-        let secs = get_next_time()?.unwrap_or(0);
-        let mins = get_next_time()?.unwrap_or(0);
-        let hours = get_next_time()?.unwrap_or(0);
+        let seconds: u64;
+        let minutes: u64;
+        let mut hours = 0u64;
 
-        let duration = Duration::from_secs(secs + mins * 60 + hours * 3600);
+        match times.len() {
+            2 => {
+                minutes = times[0].parse()?;
+                seconds = times[1].parse()?;
+            }
+            3 => {
+                hours = times[0].parse()?;
+                minutes = times[1].parse()?;
+                seconds = times[2].parse()?;
+            }
+            _ => {
+                return Err(anyhow!("Invalid format!"));
+            }
+        }
 
-        Ok(Self::new(duration)?)
+        if seconds >= 60 || minutes >= 60 {
+            return Err(anyhow!("Invalid time!"));
+        }
+        if hours > 100 {
+            return Err(anyhow!("Hours must be less than or equal to 100"));
+        }
+
+        let duration = Duration::from_secs(seconds + minutes * 60 + hours * 3600);
+
+        if duration.is_zero() {
+            return Err(anyhow!("The timer must not be zero seconds long!"));
+        }
+
+        Ok(Self::new(duration))
     }
 }
 
@@ -126,9 +153,13 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn timer_invalid_str() {
-        Timer::from_str("what").unwrap();
-        Timer::from_str("huh:10").unwrap();
+        assert!(Timer::from_str("what").is_err());
+        assert!(Timer::from_str("huh:10").is_err());
+        assert!(Timer::from_str("sfjklwahl;fjwka;jkfdwadfsa:jwkla;f;jwda").is_err());
+        assert!(Timer::from_str("13:000").is_ok());
+        assert!(Timer::from_str("10:123").is_err());
+        assert!(Timer::from_str("2000:00:00").is_err());
+        assert!(Timer::from_str("0:0").is_err());
     }
 }
