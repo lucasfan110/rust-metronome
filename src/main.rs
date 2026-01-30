@@ -73,7 +73,7 @@ fn main() -> anyhow::Result<()> {
     let mut timer_render_tracker = TimerRenderTracker::new(Arc::clone(&metronome_data));
 
     let mut _metronome_sound_data;
-    let mut _timer_alarm_sound_data;
+    let mut _timer_alarm_sound_data: Option<(rodio::OutputStream, rodio::Sink)> = None;
 
     let (sender, receiver) = mpsc::channel::<UserInput>();
 
@@ -115,7 +115,7 @@ fn main() -> anyhow::Result<()> {
             let timer = d.timer.as_ref().unwrap();
 
             if timer.time_remaining().is_zero() {
-                _timer_alarm_sound_data = play_timer_alarm()?;
+                _timer_alarm_sound_data = Some(play_timer_alarm()?);
             }
         }
 
@@ -123,10 +123,10 @@ fn main() -> anyhow::Result<()> {
         if let Ok(message) = receiver.try_recv() {
             metronome_data.write().unwrap().execute(&message);
 
-            if let UserInput::Pause = message {
-                // Subtract last beat time by a huge amount, so when the user resumes,
-                // there is no awkward wait, especially for slower tempo
-                metronome_beat_tracker.offset_beat_timestamp();
+            match message {
+                UserInput::Pause => metronome_beat_tracker.offset_beat_timestamp(),
+                UserInput::StopTimer => _timer_alarm_sound_data = None,
+                _ => {}
             }
 
             ui.render()?;

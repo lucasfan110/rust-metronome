@@ -1,3 +1,7 @@
+## Version 0.6.1 (01/29/2026)
+
+* Fixed an issue where `timer stop` doesn't stop the timer alarm audio
+
 ## Version 0.6.0 (01/29/2026)
 
 * Added `7/8` time signature support. Right now only the pattern `X..x.x.` is supported. Other patterns will be added.
@@ -5,6 +9,8 @@
 * Changed code structure to accommodate irregular time signatures
 
 * Updated `clap` to version 4.5.56
+
+* Updated internal code implementation
 
 ## Version 0.5.0 (12/20/2025)
 
