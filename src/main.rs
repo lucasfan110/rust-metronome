@@ -125,7 +125,7 @@ fn main() -> anyhow::Result<()> {
 
             match message {
                 UserInput::Pause => metronome_beat_tracker.offset_beat_timestamp(),
-                UserInput::StopTimer => _timer_alarm_sound_data = None,
+                UserInput::StopTimer | UserInput::SetTimer(_) => _timer_alarm_sound_data = None,
                 _ => {}
             }
 

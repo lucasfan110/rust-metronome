@@ -4,6 +4,16 @@
 2. Used like so `timer HH:MM:SS`. If only two fields are supplied (e.g. `12:00`), then default to `MM:SS`. Same if there is only one field supplied
 3. Also another command which is `stop`, and it stops the timer.
 
+## Thoughts
+
+* Hmm... Right now the metronome data stores the timer object which contains a created time stamp and the duration it should last
+
+* And the audio is stored in the main function.
+
+* So the audio and the actual timer is detached, and it's causing a bit of a problem.
+
+* Maybe just like set the timer audio to none if a new timer starts too
+
 ## Execute
 
 1. In `data.rs`, in `execute`, when the timer command is sent, parse the time string into a timer struct.

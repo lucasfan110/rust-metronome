@@ -1,3 +1,7 @@
+## Version 0.6.2 (02/01/2026)
+
+* Fixed an issue where setting a new timer after one timer expires doesn't stop the audio
+
 ## Version 0.6.1 (01/29/2026)
 
 * Fixed an issue where `timer stop` doesn't stop the timer alarm audio
